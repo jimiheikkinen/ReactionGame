@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Time Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .btn {
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #22d3ee; /* cyan-400 */
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl text-center w-full max-w-md mx-4">
+        <h1 class="text-4xl font-bold mb-2 text-cyan-400">Reaction Test</h1>
+        <p class="text-gray-400 mb-6">Click the red button as fast as you can!</p>
+        
+        <!-- Game Buttons -->
+        <div id="game-container" class="grid grid-cols-3 gap-4 mb-6">
+            <button id="btn-1" class="btn bg-blue-600 hover:bg-blue-700 h-24 sm:h-32 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-500/50"></button>
+            <button id="btn-2" class="btn bg-blue-600 hover:bg-blue-700 h-24 sm:h-32 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-500/50"></button>
+            <button id="btn-3" class="btn bg-blue-600 hover:bg-blue-700 h-24 sm:h-32 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-500/50"></button>
+        </div>
+
+        <!-- Game Info and Controls -->
+        <div id="message-container" class="bg-gray-700/50 p-4 rounded-lg mb-6 min-h-[80px] flex items-center justify-center">
+             <p id="message" class="text-xl font-medium text-gray-300">Press 'Start' to begin.</p>
+        </div>
+
+        <div id="controls-container" class="flex flex-col sm:flex-row gap-4">
+            <button id="start-btn" class="w-full bg-cyan-500 hover:bg-cyan-600 text-gray-900 font-bold py-3 px-4 rounded-lg text-lg shadow-lg">
+                Start Game
+            </button>
+            <button id="analyze-btn" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg hidden">
+                ✨ Analyze My Reaction
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('start-btn');
+        const analyzeButton = document.getElementById('analyze-btn');
+        const messageDisplay = document.getElementById('message');
+        const messageContainer = document.getElementById('message-container');
+        const gameButtons = [
+            document.getElementById('btn-1'),
+            document.getElementById('btn-2'),
+            document.getElementById('btn-3')
+        ];
+
+        let gameTimeout;
+        let startTime;
+        let activeIndex = -1; // -1 means no button is active
+        let currentReactionTime = 0;
+
+        // Function to start a new game round
+        const startGame = () => {
+            // Disable start button and reset UI
+            startButton.disabled = true;
+            startButton.classList.add('opacity-50', 'cursor-not-allowed');
+            analyzeButton.classList.add('hidden');
+            messageDisplay.textContent = 'Get ready...';
+            messageDisplay.classList.remove('hidden');
+            
+            // Reset all buttons to blue
+            resetButtons();
+
+            // Set a random delay before a button turns red
+            const delay = Math.random() * 3000 + 1000; // 1 to 4 seconds
+            
+            gameTimeout = setTimeout(() => {
+                // Pick a random button to turn red
+                activeIndex = Math.floor(Math.random() * 3);
+                gameButtons[activeIndex].classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                gameButtons[activeIndex].classList.add('bg-red-600', 'hover:bg-red-700');
+                
+                messageDisplay.textContent = 'Click!';
+                
+                // Record the time when the button turned red
+                startTime = Date.now();
+            }, delay);
+        };
+
+        // Function to handle clicks on the game buttons
+        const handleButtonClick = (index) => {
+            // If no button is active (game hasn't started or user clicked too early)
+            if (activeIndex === -1) {
+                if (gameTimeout) {
+                    clearTimeout(gameTimeout);
+                    messageDisplay.textContent = 'Too soon! Press Start to try again.';
+                    endGame();
+                }
+                return;
+            }
+            
+            // If the correct button was clicked
+            if (index === activeIndex) {
+                const endTime = Date.now();
+                const reactionTime = endTime - startTime;
+                currentReactionTime = reactionTime;
+                messageDisplay.innerHTML = `Your reaction time: <span class="text-cyan-400 font-bold">${reactionTime}ms</span>`;
+                analyzeButton.classList.remove('hidden');
+                analyzeButton.disabled = false;
+            } else { // If the wrong button was clicked
+                messageDisplay.textContent = 'Wrong button! Press Start to try again.';
+            }
+            
+            endGame();
+        };
+
+        // Function to get reaction analysis from Gemini API
+        const getReactionAnalysis = async () => {
+            if (currentReactionTime === 0) return;
+
+            analyzeButton.disabled = true;
+            messageContainer.innerHTML = '<div class="spinner"></div>';
+
+            const systemPrompt = `You are a witty and slightly sarcastic game commentator. Your job is to analyze a player's reaction time in a simple browser game. Provide a short, funny, one-sentence comment. If the time is fast (under 250ms), be very impressed. If it's average (250-450ms), be playfully neutral. If it's slow (over 450ms), roast them gently but humorously. Keep it concise.`;
+            const userQuery = `My reaction time was ${currentReactionTime}ms. What do you think?`;
+            
+            const apiKey = ""; // API key is handled by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API call failed with status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const analysisText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (analysisText) {
+                    messageDisplay.textContent = analysisText;
+                } else {
+                    throw new Error("Could not parse analysis from API response.");
+                }
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                messageDisplay.textContent = "Couldn't get analysis. Try again!";
+            } finally {
+                messageContainer.innerHTML = '';
+                messageContainer.appendChild(messageDisplay);
+                analyzeButton.classList.add('hidden');
+            }
+        };
+
+        // Function to reset buttons to their default state
+        const resetButtons = () => {
+            gameButtons.forEach(button => {
+                button.classList.remove('bg-red-600', 'hover:bg-red-700');
+                button.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            });
+            activeIndex = -1;
+        };
+
+        // Function to end the current game round and reset for the next one
+        const endGame = () => {
+            startButton.disabled = false;
+            startButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            startButton.textContent = 'Play Again';
+            resetButtons();
+            clearTimeout(gameTimeout);
+        };
+
+        // Event Listeners
+        startButton.addEventListener('click', startGame);
+        analyzeButton.addEventListener('click', getReactionAnalysis);
+        gameButtons.forEach((button, index) => {
+            button.addEventListener('click', () => handleButtonClick(index));
+        });
+    </script>
+</body>
+</html>
+
